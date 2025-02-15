@@ -13,10 +13,10 @@ from collections import Counter
 fail2ban_log_path = '/var/log/fail2ban.log'
 
 # Define your ipinfo.io token
-ipinfo_token = 'token here'
+ipinfo_token = 'token'
 
 # Define your Discord webhook URL
-discord_webhook_url = 'https://discord.com/api/webhooks/'  # Replace with your webhook URL
+discord_webhook_url = 'webhooks'  # Replace with your webhook URL
 
 # Get banned IPs from Fail2Ban log
 def get_banned_ips(log_path):
@@ -31,6 +31,31 @@ def get_banned_ips(log_path):
             if timestamp > cutoff_time:
                 banned_ips.add(line.split()[-1])
     return list(banned_ips)
+
+# Get unbanned IPs from Fail2Ban log
+def get_unbanned_ips(log_path):
+    unbanned_ips = set()
+    cutoff_time = datetime.now() - timedelta(days=1)
+    with open(log_path, 'r') as file:
+        lines = file.readlines()
+    for line in lines:
+        if 'Unban' in line:
+            timestamp_str = ' '.join(line.split()[:2])
+            timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S,%f')
+            if timestamp > cutoff_time:
+                unbanned_ips.add(line.split()[-1])
+    return list(unbanned_ips)
+
+# Plot unbanned IPs
+def plot_unbanned_ips(unbanned_ips):
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.bar(unbanned_ips, range(len(unbanned_ips)))
+    ax.set_title('Unbanned IPs in the Last 24 Hours')
+    ax.set_xlabel('IP Address')
+    ax.set_ylabel('Unban Count')
+    plt.xticks(rotation=90)
+    plt.tight_layout()
+    return fig
 
 # Get IP information from ipinfo.io
 def get_ip_info(ip, token):
@@ -93,6 +118,8 @@ def send_image_to_discord(fig, webhook_url, filename):
 def main():
     banned_ips = get_banned_ips(fail2ban_log_path)
     banned_ips_info = [get_ip_info(ip, ipinfo_token) for ip in banned_ips]
+
+    unbanned_ips = get_unbanned_ips(fail2ban_log_path)
     
     # Plot and send Country, State, City distribution chart
     fig1 = plot_country_state_city(banned_ips_info)
@@ -101,6 +128,10 @@ def main():
     # Plot and send IP details chart
     fig2 = plot_ip_details(banned_ips_info)
     send_image_to_discord(fig2, discord_webhook_url, 'ip_details.png')
+
+    # Plot and send Unbanned IPs chart
+    fig3 = plot_unbanned_ips(unbanned_ips)
+    send_image_to_discord(fig3, discord_webhook_url, 'unbanned_ips.png')
 
 if __name__ == '__main__':
     main()
